@@ -63,7 +63,7 @@ intents: [
   Intents.FLAGS.GUILD_VOICE_STATES,
   Intents.FLAGS.GUILD_MESSAGES,
   Intents.FLAGS.GUILD_MESSAGE_REACTIONS,
-  IntentsBitField.Flags.MessageContent,
+  Intents.Flags.MessageContent,
 ],
 }); // Declare client to be a new Discord Client (bot)
 require('http').createServer((req, res) => res.end(`
@@ -180,59 +180,10 @@ const channelIds = settings.CHANNEL_IDS || [];
 //-----------------------------------------------------------------------------
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
-    
-  //-----------------------------------------------------------------------------
-  // التحقق من هوية صاحب الخادم (الأونر)
-  const isServerOwner = message.guild && message.guild.ownerId === message.author.id;
-  // أمر لتعيين قيمة CHANNEL_ID
-  if (message.content.startsWith('setchannel')) {
-    const channelId = message.content.split(' ')[1];
-    if (channelId) {
-      if (isServerOwner) {
-        if (channelIds.includes(channelId)) {
-          message.reply(`**البوت مربوط بالفعل بهذا الشات <#${channelId}>.**`);
-        } else {
-          channelIds.push(channelId);
-          settings.CHANNEL_IDS = channelIds;
-          fs.writeFileSync('settings.json', JSON.stringify(settings, null, 2), 'utf8');
-          message.reply(`**تم تعيين <#${channelId}> شات Chatgpt**`);
-        }
-      } else {
-        message.reply(`**عذرًا، هذا الأمر متاح فقط لصاحب الخادم (الأونر).**`);
-      }
-      return;
-    }
-  }
-    
-  //-----------------------------------------------------------------------------
-  // أمر لإزالة قيمة CHANNEL_ID
-  if (message.content.startsWith('removechannel')) {
-    if (settings.CHANNEL_IDS) {
-      const removedChannelId = message.channel.id;
-      if (channelIds.includes(removedChannelId)) {
-        if (isServerOwner) {
-          channelIds.splice(channelIds.indexOf(removedChannelId), 1);
-          settings.CHANNEL_IDS = channelIds;
-          fs.writeFileSync('settings.json', JSON.stringify(settings, null, 2), 'utf8');
-          message.reply(`**تمت إزالة الشات بنجاح من <#${removedChannelId}>**`);
-        } else {
-          message.reply(`**عذرًا، هذا الأمر متاح فقط لصاحب الخادم (الأونر).**`);
-        }
-      } else {
-        message.reply(`**البوت غير مربوط بهذا الشات <#${removedChannelId}>**`);
-      }
-    } else {
-      message.reply(`**ليس هناك شات مربوط. يرجى ربط البوت بالشات أولاً.**`);
-    }
-    return;
-  }
-
   // التحقق مما إذا كانت الرسالة مرسلة في إحدى القنوات المعرفة
   if (!channelIds.includes(message.channel.id)) {
     return;
   }
-    
-  //-----------------------------------------------------------------------------
   if (message.content.startsWith('!')) return;
 
   let conversationLog = [
