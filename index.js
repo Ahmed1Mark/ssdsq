@@ -1,10 +1,9 @@
-const { Client, Intents, MessageButton, IntentsBitField, DiscordAPIError, MessageSelectMenu, MessageButtonStyles, MessageAttachment, MessageEmbed, MessageActionRow } = require('discord.js');
+const { Client, Intents, MessageButton, IntentsBitField, DiscordAPIError, MessageSelectMenu, MessageAttachment, MessageEmbed, MessageActionRow } = require('discord.js');
 const { loadImage, Canvas} = require("canvas-constructor/cairo")
 const { version } = require("discord.js")
 const Keyv = require('keyv');
 const { inviteTracker } = require("discord-inviter");
 const fs = require('fs');
-const { startServer } = require("./alive.js");
 const { REST } = require('@discordjs/rest');
 const { Routes } = require('discord-api-types/v9');
 const moment = require('moment');
@@ -13,7 +12,6 @@ const db = new Keyv('sqlite://./storage/database.sqlite');
 const express = require('express');
 const app = express();
 const path = require("path");
-const ytdl = require('ytdl-core');
 
 const {
     token,
@@ -58,18 +56,17 @@ const lastInteractions = new Map();
 const usersInVoiceChannel = new Set();
 const playingInChannel = new Map();
 let isPlaying = false;
-async function joinVoiceChannelAndPlay() {
+async function joinVoiceChannelAndPlay(channel) {
   try {
-    const channel = client.channels.cache.get(channelIdToJoin);
     if (!channel || channel.type !== "GUILD_VOICE") {
       console.error(
-        "Invalid voice channel ID or the bot cannot find the channel.",
+        "Invalid voice channel or the bot cannot find the channel.",
       );
       return null;
     }
 
     const connection = joinVoiceChannel({
-      channelId: channelIdToJoin,
+      channelId: channel.id,
       guildId: channel.guild.id,
       adapterCreator: channel.guild.voiceAdapterCreator,
     });
@@ -80,6 +77,45 @@ async function joinVoiceChannelAndPlay() {
     return null;
   }
 }
+
+client.once("ready", async () => {
+  // هنا يمكنك الاستعانة بقائمة الأعضاء في القناة الصوتية لمراقبة مدى وجود البوت في القناة
+  const usersInVoiceChannel = new Set();
+
+  const channel = client.channels.cache.get(channelIdToJoin);
+  if (channel && channel.type === "GUILD_VOICE") {
+    // التحقق مما إذا كان البوت متصلًا بالفعل بالقناة
+    if (!channel.members.has(client.user.id)) {
+      const connection = await joinVoiceChannelAndPlay(channel);
+      if (connection) {
+        const player = createAudioPlayer();
+        connection.subscribe(player);
+        const resource = createAudioResource(fs.createReadStream(mp3FilePath));
+        player.play(resource);
+      }
+    }
+  } else {
+    console.error("Invalid voice channel ID or the bot cannot find the channel.");
+  }
+
+  client.on("voiceStateUpdate", async (oldState, newState) => {
+    const oldChannel = oldState.channel;
+    const newChannel = newState.channel;
+
+    if (newState.member.user.bot) {
+      return;
+    }
+
+    if (newChannel && newChannel.id === channelIdToJoin) {
+      // هنا يمكنك إدارة التفاعل مع دخول الأعضاء للقناة الصوتية
+    }
+
+    if (oldState.channel && oldState.channel.id === channelIdToJoin && !newState.channel) {
+      // هنا يمكنك إدارة التفاعل مع خروج الأعضاء من القناة الصوتية
+    }
+  });
+});
+
 client.once("ready", async () => {
 const playingInChannel = new Map();
 let isPlaying = false;
@@ -149,7 +185,7 @@ tracker.on("guildMemberAdd", async (member, inviter, invite, error) => {
   // return when get error
   if(error) return console.error(error);
   // get the channel
-  let channel = member.guild.channels.cache.get("1226361031060623400"),
+  let channel = member.guild.channels.cache.get("1230784484257959936"),
     Msg = (`
 1. ${member.user} **- تم دعوة شخص جديد للسيرفر**
 2. <@!${inviter.id}> **- تمت دعوته من قبل**
@@ -187,7 +223,7 @@ client.on('ready', () => {
   console.log(`</> channels : ${client.channels.cache.size}`);
   console.log(`</> Name : ${client.user.username}`);
   client.user.setStatus('idle');///dnd/online/idle
-  let status = [`By Abu,Gabaaal`];
+  let status = [`By : Ahmed Clipper`];
   setInterval(()=>{
   client.user.setActivity(status[Math.floor(Math.random()*status.length)]);
   },5000)
@@ -243,41 +279,42 @@ client.on('messageCreate', async message => {
 const ticketOpenerId = message.author.id;   
 const selectMenuOptions = [
     {
-        label: 'لجنة الرقابة',
+        label: 'Buy Robux',
         value: 'ticket_1',
-        description: 'قسم للإبلاغ عن مخالفات',
-        emoji: '⛔'
+        description: 'Buy Robux In Roblox Game.',
+        emoji: '<:G7:1151244037517488159>'
     },
     {
-        label: 'طلب عقوبة إدارية',
+        label: 'Buy UC For PUBG MOBILE',
         value: 'ticket_2',
-        description: 'طلب طرد أو عقوبة للمستخدم',
-        emoji: '⛔'
+        description: 'Buy UC in PUBG Mobile Game.',
+        emoji: '<:pubgmobile:1102769748518916146>'
     },
     {
-        label: 'بلاغ ضد مخرب',
+        label: 'Buy Project Bot Discord',
         value: 'ticket_3',
-        description: 'الإبلاغ عن سلوك مخرب',
-        emoji: '⛔'
+        description: 'Purchase Bot Projects Or Code.',
+        emoji: '<:921703781027184660:1089615608154431579>'
     },
     {
-        label: 'بلاغ عن مشكلة تقنية',
+        label: 'Photoshop Designer',
         value: 'ticket_4',
-        description: 'الإبلاغ عن مشكلة تقنية',
-        emoji: '⛔'
+        description: 'Creating Designs Or Backgrounds',
+        emoji: '🖼'
     },
     {
-        label: 'طلب تعويض',
+        label: 'Editing Discord Server',
         value: 'ticket_5',
-        description: 'طلب تعويض عن خسارة',
-        emoji: '⛔'
+        description: 'Modifying Organizing Discord Servers.',
+        emoji: '📈'
     },
     {
-        label: 'تقديم لاعب معتمد',
+        label: 'Support Team',
         value: 'ticket_6',
-        description: 'تقديم طلب لاعب محترف',
-        emoji: '☑️'
+        description: 'Talk To The Management Staff',
+        emoji: '<:911751899324239902:1089615602471141416>'
     },
+  /*/
     {
         label: 'تقديم صانع محتوى',
         value: 'ticket_7',
@@ -314,17 +351,18 @@ const selectMenuOptions = [
         description: 'قسم الصيانة والدعم الفني',
         emoji: '👨‍🔧'
     }
+    /*/
 ];
         const selectMenu = new MessageSelectMenu()
             .setCustomId('ticket_panel')
-            .setPlaceholder('يرجي اختيار القسم الذي تريده')
+            .setPlaceholder('Please Choose The Specialty You Desire')
             .addOptions(selectMenuOptions);
 
         const row = new MessageActionRow().addComponents(selectMenu);
 
         const embed = new MessageEmbed()
-            .setTitle('> THE 4 SEASON | TICKET ')
-            .setDescription(`**شروط وتعليمات التذكرة** \n1. اختر نوع التذكرة المناسب لموضوعك \n2. اتبع الإرشادات واكمل المتطلبات المذكورة في التذكرة \n3. لا تفتح تذكرة جديدة بنفس الموضوع إذا تم إغلاق التذكرة، ستصلك نسخة من الرد على طلبك على الخاص \n4. تغلق التذكرة إذا تم الرد على موضوعك أو إذا تبين عدم اختصاص التذكرة بموضوعك \n5. يتم إغلاق التذكرة بعد مرور 30 دقيقة من آخر رد \n6. ممنوع فتح مواضيع جانبية أو طلب مستلم التذكرة بروم صوتي أو بموضوع خارج اختصاص التذكرة \n7. ممنوع طلب شخص محدد لاستلام التذكرة \n8. في حالة مخالفة شروط التذكرة، ستتم إغلاق الطلب وإعطاء رول مخالف لشروط التذكرة لفترة مؤقتة \n9. إذا كان موضوعك يتعلق بالبان، فقد يتم إحالة التذكرة إلى تظلم من البان خطأ. تطبق \n10. لا يمكن طلب شخص محدد للرد عليك في التذكرة \n11. يجب أن يكون طلبك مكتوبًا في التذكرة، ولن يتم الرد على طلبات في الصورة أو مقطع صوتي أو مقطع فيديو \n12. يعاقب التعديل أو التزوير في الأدلة أو الحلف كذبًا في التذكرة بتصفير حساب اللاعب وحظره نهائي \n13. لا يمكن الاعتراض أو الاستفسار بسبب إجراءات المراقب البسيطة مثل الإنذار (التنبيه) وسحب التأشيرة إلخ \n14. نشكرك على حسن التفهم ونسعى لتقديم الدعم عن طريق التذكرة لأفضل خدمة`);
+            .setTitle("<a:3_:1089615585232556204> Welcome To Server __Ra'ad__ Community <a:12:1150947511146664017>")
+            .setDescription(`<a:11:1150943009442107523> Please choose the section you want \n<a:11:1150943009442107523> God willing, you will find what you want on the server \n\n <:921703781027184660:1089615608154431579> **Developer BOT <@803873969168973855> <:911751899324239902:1089615602471141416>**`);
 
         message.channel.send({ embeds: [embed], components: [row] });
     }
@@ -346,7 +384,7 @@ function hasClaimPermission(member) {
 
 // Add roles with permission to claim
 // Replace 'role_id_1', 'role_id_2', etc. with the actual role IDs
-claimPermissions.add('1184800280198533131');
+claimPermissions.add('1218308274852728932');
 claimPermissions.add('1218349464817897533');
 claimPermissions.add('1223814666958934096');
 claimPermissions.add('1223814667638407299');
@@ -372,15 +410,15 @@ client.on('interactionCreate', async interaction => {
   
 if (interaction.customId === 'addmem_kikmem') {
       if (!hasClaimPermission(member)) {
-        await interaction.reply({ content: 'ليس لديك السلطة للقيام بهذا الإجراء', ephemeral: true });
+        await interaction.reply({ content: 'You do not have the authority to take this action', ephemeral: true });
         return;
     }
     // إرسال رسالة لتأكيد الإغلاق
-    await interaction.reply({ content: 'قم بتحديد الأجراء المطلوب', ephemeral: true,
+    await interaction.reply({ content: 'Determine the required action', ephemeral: true,
         components: [
             new MessageActionRow().addComponents(
-                new MessageButton().setCustomId('remove_member').setLabel('إزالة شخص').setStyle('DANGER'),
-                new MessageButton().setCustomId('add_member').setLabel('أضافة شخص').setStyle('SECONDARY')
+                new MessageButton().setCustomId('remove_member').setLabel('Remove a person').setStyle('DANGER'),
+                new MessageButton().setCustomId('add_member').setLabel('Add a person').setStyle('SECONDARY')
             )
         ]
     });
@@ -389,16 +427,16 @@ if (interaction.customId === 'addmem_kikmem') {
 
 if (interaction.customId === 'msg_control') {
       if (!hasClaimPermission(member)) {
-        await interaction.reply({ content: 'ليس لديك السلطة للقيام بهذا الإجراء', ephemeral: true });
+        await interaction.reply({ content: 'You do not have the authority to take this action', ephemeral: true });
         return;
     }
     // إرسال رسالة لتأكيد الإغلاق
-    await interaction.reply({ content: 'قم بتحديد الأجراء المطلوب', ephemeral: true,
+    await interaction.reply({ content: 'Determine the required action', ephemeral: true,
         components: [
             new MessageActionRow().addComponents(
-                new MessageButton().setCustomId('msgdeleted').setLabel('حذف رسالة').setStyle('DANGER'),
-                new MessageButton().setCustomId('sendmsgpost').setLabel('إرسال رسالة عادية').setStyle('SECONDARY'),
-                new MessageButton().setCustomId('sendmsgembed').setLabel('إرسال رسالة بـ أمبيد').setStyle('SECONDARY')
+                new MessageButton().setCustomId('msgdeleted').setLabel('Delete message').setStyle('DANGER'),
+                new MessageButton().setCustomId('sendmsgpost').setLabel('Send a regular message').setStyle('SECONDARY'),
+                new MessageButton().setCustomId('sendmsgembed').setLabel('Send a message with Embed').setStyle('SECONDARY')
             )
         ]
     });
@@ -407,15 +445,15 @@ if (interaction.customId === 'msg_control') {
 
 if (interaction.customId === 'msg_sendcontrol') {
       if (!hasClaimPermission(member)) {
-        await interaction.reply({ content: 'ليس لديك السلطة للقيام بهذا الإجراء', ephemeral: true });
+        await interaction.reply({ content: 'You do not have the authority to take this action', ephemeral: true });
         return;
     }
     // إرسال رسالة لتأكيد الإغلاق
-    await interaction.reply({ content: 'قم بتحديد الأجراء المطلوب', ephemeral: true,
+    await interaction.reply({ content: 'Determine the required action', ephemeral: true,
         components: [
             new MessageActionRow().addComponents(
-                new MessageButton().setCustomId('sendowntick').setLabel('إرسال رسالة لصاحب التذكرة').setStyle('SECONDARY'),
-                new MessageButton().setCustomId('sendmemberid').setLabel('إرسال رسالة لمستخدم معيا').setStyle('SECONDARY')
+                new MessageButton().setCustomId('sendowntick').setLabel('Send a message to the ticket owner').setStyle('SECONDARY'),
+                new MessageButton().setCustomId('sendmemberid').setLabel('Send a message to a specific user').setStyle('SECONDARY')
             )
         ]
     });
@@ -424,12 +462,12 @@ if (interaction.customId === 'msg_sendcontrol') {
 
 if (interaction.customId === 'sendmemberid') {
     if (!hasClaimPermission(member)) {
-        await interaction.reply({ content: 'ليس لديك السلطة للقيام بهذا الإجراء', ephemeral: true });
+        await interaction.reply({ content: 'You do not have the authority to take this action', ephemeral: true });
         return;
     }
     
     // طلب إدخال ID الشخص
-    await interaction.reply({ content: 'تحت الصيانة والتجارب', ephemeral: true });
+    await interaction.reply({ content: 'Under maintenance and testing', ephemeral: true });
 
     const filter = (response) => response.user.id === interaction.user.id;
     const collector = interaction.channel.createMessageCollector({ filter, max: 1, time: 60000 }); // المستخدم لديه دقيقة واحدة للرد
@@ -438,7 +476,7 @@ if (interaction.customId === 'sendmemberid') {
         const recipientId = msg.content;
 
         // طلب إدخال نص الرسالة
-        await interaction.followUp({ content: 'ادخل النص المراد إرساله للشخص', ephemeral: true });
+        await interaction.followUp({ content: 'Enter the text you want to send to the person', ephemeral: true });
 
         const messageCollector = interaction.channel.createMessageCollector({ filter, max: 1, time: 60000 });
 
@@ -446,19 +484,19 @@ if (interaction.customId === 'sendmemberid') {
             const textToSend = message.content;
 
             // هنا يمكنك إجراء أي إجراء آخر مثل إرسال الرسالة للمستخدم المحدد
-            await interaction.followUp({ content: `ستقوم بإرسال الرسالة "${textToSend}" للمستخدم ذو الـ ID ${recipientId}`, ephemeral: true });
+            await interaction.followUp({ content: `You will send the message "${textToSend}" For the user with the ID ${recipientId}`, ephemeral: true });
         });
 
         messageCollector.on('end', async (collected) => {
             if (collected.size === 0) {
-                await interaction.followUp({ content: 'لم يتم تقديم رد في الوقت المناسب.', ephemeral: true });
+                await interaction.followUp({ content: 'No timely response was provided.', ephemeral: true });
             }
         });
     });
 
     collector.on('end', async (collected) => {
         if (collected.size === 0) {
-            await interaction.followUp({ content: 'لم يتم تقديم رد في الوقت المناسب.', ephemeral: true });
+            await interaction.followUp({ content: 'No timely response was provided.', ephemeral: true });
         }
     });
 }
@@ -466,7 +504,7 @@ if (interaction.customId === 'sendmemberid') {
 
 if (interaction.customId === 'sendmsgembed') {
     // قم بتنفيذ الإجراء المرتبط بإرسال رسالة بـ أمبيد
-    const msg = await interaction.reply({ content: 'ادخل الكلام لارسال الرسالة بأمبيد', ephemeral: true });
+    const msg = await interaction.reply({ content: 'Enter the speech to send the message using Embed', ephemeral: true });
 
     // استجابة للرسالة القادمة من المستخدم
     const filter = m => m.author.id === interaction.user.id;
@@ -479,14 +517,14 @@ if (interaction.customId === 'sendmsgembed') {
             await interaction.deleteReply(); // حذف رسالة الرد الأصلية
             await m.delete(); // حذف رسالة المستخدم
         } catch (error) {
-            console.error('حدث خطأ أثناء محاولة إرسال الرسالة بأمبيد:', error);
-            await interaction.followUp({ content: 'حدث خطأ أثناء محاولة إرسال الرسالة بأمبيد', ephemeral: true });
+            console.error('An error occurred while trying to send the message with Embed:', error);
+            await interaction.followUp({ content: 'An error occurred while trying to send the message with Embed', ephemeral: true });
         }
     });
 
     collector.on('end', collected => {
         if (collected.size === 0) {
-            interaction.followUp({ content: 'لم يتم تقديم النص لإرسال الرسالة بأمبيد في الوقت المناسب', ephemeral: true });
+            interaction.followUp({ content: 'The text was not provided to send the message to Ambed in time', ephemeral: true });
             msg.delete(); // حذف رسالة الطلب الأصلية
         }
     });
@@ -505,7 +543,7 @@ async function sendEmbedMessage(interaction, content) {
 
 if (interaction.customId === 'sendmsgpost') {
     // قم بتنفيذ الإجراء المرتبط بإرسال رسالة عادية
-    const msg = await interaction.reply({ content: 'ادخل الكلام لارسال الرسالة', ephemeral: true });
+    const msg = await interaction.reply({ content: 'Enter the speech to send the message', ephemeral: true });
 
     // استجابة للرسالة القادمة من المستخدم
     const filter = m => m.author.id === interaction.user.id;
@@ -517,14 +555,14 @@ if (interaction.customId === 'sendmsgpost') {
             await interaction.channel.send({ content: content }); // إرسال الرسالة بالشات ليروها الجميع
             await m.delete(); // حذف رسالة المستخدم
         } catch (error) {
-            console.error('حدث خطأ أثناء محاولة إرسال الرسالة:', error);
-            await interaction.followUp({ content: 'حدث خطأ أثناء محاولة إرسال الرسالة', ephemeral: true });
+            console.error('An error occurred while trying to send the message:', error);
+            await interaction.followUp({ content: 'An error occurred while trying to send the message', ephemeral: true });
         }
     });
 
     collector.on('end', collected => {
         if (collected.size === 0) {
-            interaction.followUp({ content: 'لم يتم تقديم النص لإرسال الرسالة في الوقت المناسب', ephemeral: true });
+            interaction.followUp({ content: 'The text was not provided to send the message in time', ephemeral: true });
             msg.delete(); // حذف رسالة الطلب الأصلية
         }
     });
@@ -538,7 +576,7 @@ async function sendMessage(interaction, content) {
 
 if (interaction.customId === 'msgdeleted') {
     // قم بتنفيذ الإجراء المرتبط بحذف الرسالة
-    await interaction.reply({ content: 'ادخل id الرسالة المراد حذفها', ephemeral: true });
+    await interaction.reply({ content: 'Enter the ID of the message you want to delete', ephemeral: true });
 
     // استجابة للرسالة القادمة من المستخدم
     const filter = m => m.author.id === interaction.user.id;
@@ -549,16 +587,16 @@ if (interaction.customId === 'msgdeleted') {
         try {
             const channel = interaction.channel;
             const message = await channel.messages.fetch(messageId);
-            await interaction.followUp({ content: 'تم حذف الرسالة بنجاح', ephemeral: true });
+            await interaction.followUp({ content: 'The message has been successfully deleted', ephemeral: true });
         } catch (error) {
-            console.error('حدث خطأ أثناء محاولة حذف الرسالة:', error);
-            await interaction.followUp({ content: 'حدث خطأ أثناء محاولة حذف الرسالة', ephemeral: true });
+            console.error('An error occurred while trying to delete the message:', error);
+            await interaction.followUp({ content: 'An error occurred while trying to delete the message', ephemeral: true });
         }
     });
 
     collector.on('end', collected => {
         if (collected.size === 0) {
-            interaction.followUp({ content: 'لم يتم تقديم ID لحذف الرسالة في الوقت المناسب', ephemeral: true });
+            interaction.followUp({ content: 'The ID was not provided to delete the message in time', ephemeral: true });
         }
     });
 }
@@ -574,12 +612,12 @@ if (interaction.customId === 'rate_1_star' || interaction.customId === 'rate_2_s
 if (interaction.customId === 'close_ticket') {
     // إرسال رسالة لتأكيد الإغلاق
     await interaction.reply({
-        content: 'هل أنت متأكد أنك تريد إغلاق هذه التذكرة؟',
+        content: 'Are you sure you want to close this ticket?',
         ephemeral: true,
         components: [
             new MessageActionRow().addComponents(
-                new MessageButton().setCustomId('confirm_close').setLabel('تم الانتهاء').setStyle('DANGER'),
-                new MessageButton().setCustomId('cancel_close').setLabel('اللغاء').setStyle('SECONDARY')
+                new MessageButton().setCustomId('confirm_close').setLabel('Close').setStyle('DANGER'),
+                new MessageButton().setCustomId('cancel_close').setLabel('Cancel').setStyle('SECONDARY')
             )
         ]
     });
@@ -666,13 +704,13 @@ if (interaction.customId === 'close_ticket') {
         setTimeout(async () => {
             const closedEmbed = new MessageEmbed()
                 .setColor('#00ff00')
-                .setTitle('التذكرة مغلقة')
-                .setDescription('الشخص صاحب التذكرة لقد قام بإغلاق هذه التذكرة. هل تريد حذفه؟');
+                .setTitle('The ticket is closed')
+                .setDescription('The person who owned the ticket has closed this ticket. Do you want to delete it?');
             
             // إنشاء زر "delete ticket"
             const deleteButton = new MessageButton()
                 .setCustomId('delete_ticket')
-                .setLabel('حذف التذكرة')
+                .setLabel('Delete Ticket')
                 .setStyle('DANGER');
             
             // إضافة الزر إلى صف الأزرار
@@ -681,7 +719,7 @@ if (interaction.customId === 'close_ticket') {
             // إرسال الـ Embed مع الزر
             await channel.send({ embeds: [closedEmbed], components: [row] });
         }, 1500);
-       await interaction.reply({ content: 'لقد تم إغلاق هذه التذكرة', ephemeral: true });
+       await interaction.reply({ content: 'This ticket has been closed', ephemeral: true });
     } catch (error) {
         console.error('Error closing ticket:', error.message);
         await interaction.reply({ content: 'Failed to close the ticket.', ephemeral: true });
@@ -698,21 +736,21 @@ if (interaction.customId === 'close_ticket') {
 
     if (interaction.customId === 'cancel_close') {
     // إلغاء عملية الإغلاق
-    await interaction.reply({ content: 'تم الالغاء', ephemeral: true });
+    await interaction.reply({ content: 'was canceled', ephemeral: true });
 }
     
 
 
     if (interaction.customId === 'rename_ticket') {
         if (!hasClaimPermission(member)) {
-            await interaction.reply({ content: 'ليس لديك السلطة للقيام بهذا الإجراء', ephemeral: true });
+            await interaction.reply({ content: 'You do not have the authority to take this action', ephemeral: true });
             return;
         }
     await interaction.deferUpdate();
     const filter = m => m.author.id === interaction.user.id;
     
     try {
-        const newNamePrompt = await interaction.followUp({ content: 'الرجاء إدخال اسم التذكرة الجديد', ephemeral: true });
+        const newNamePrompt = await interaction.followUp({ content: 'Please enter a new ticket name', ephemeral: true });
         const collectedMessages = await interaction.channel.awaitMessages({ filter, max: 1, time: 15000, errors: ['time'] });
 
         const newName = collectedMessages.first().content.trim();
@@ -736,7 +774,7 @@ if (interaction.customId === 'close_ticket') {
 
     try {
         const filter = m => m.author.id === interaction.user.id;
-        const addMemberPrompt = await interaction.followUp({ content: 'يرجى ذكر الشخص الذي تريد إضافته "<@user_id>" هذا مثال لإضافة الشخص \n https://cdn.discordapp.com/attachments/986209009088491541/1228926051275636788/HitPawOnline_6319.gif?ex=662dd192&is=661b5c92&hm=d7cd9ec1b5b539e8f44d263746f5fe4f6fbf646adb1ec08239be405631a1d5f2&', ephemeral: true });
+        const addMemberPrompt = await interaction.followUp({ content: 'Please mention the person you want to add "<@user_id>" This is an example of adding a person \n https://cdn.discordapp.com/attachments/986209009088491541/1228926051275636788/HitPawOnline_6319.gif?ex=662dd192&is=661b5c92&hm=d7cd9ec1b5b539e8f44d263746f5fe4f6fbf646adb1ec08239be405631a1d5f2&', ephemeral: true });
         const collectedMessages = await interaction.channel.awaitMessages({ filter, max: 1, time: 60000, errors: ['time'] });
 
         const memberIdOrMention = collectedMessages.first().content.trim();
@@ -755,7 +793,7 @@ if (interaction.customId === 'close_ticket') {
         await interaction.reply({ content: `Member ${memberToAdd.user.tag} has been added to the ticket.`, ephemeral: true });
 
         // Send message directly after adding member successfully
-        await interaction.channel.send('تم إضافة الشخص بنجاح.');
+        await interaction.channel.send('The person has been added successfully.');
 
     } catch (error) {
         console.error('Error adding member:', error.message);
@@ -766,7 +804,7 @@ if (interaction.customId === 'close_ticket') {
 
     try {
         const filter = m => m.author.id === interaction.user.id;
-        const removeMemberPrompt = await interaction.followUp({ content: 'يرجى ذكر الشخص الذي تريد إزالته "<@user_id>" هذا مثال لإزالة الشخص', ephemeral: true });
+        const removeMemberPrompt = await interaction.followUp({ content: 'Please mention the person you want to remove "<@user_id>" This is an example of removing a person', ephemeral: true });
         const collectedMessages = await interaction.channel.awaitMessages({ filter, max: 1, time: 60000, errors: ['time'] });
 
         const memberIdOrMention = collectedMessages.first().content.trim();
@@ -781,7 +819,7 @@ if (interaction.customId === 'close_ticket') {
         await interaction.reply({ content: `Member ${memberToRemove.user.tag} has been removed from the ticket.`, ephemeral: true });
 
         // Send message directly after removing member successfully
-        await interaction.channel.send('تم إزالة الشخص بنجاح.');
+        await interaction.channel.send('The person has been successfully removed.');
 
     } catch (error) {
         console.error('Error removing member:', error.message);
@@ -795,7 +833,7 @@ if (interaction.customId === 'close_ticket') {
 if (interaction.customId === 'add_note') {
     // التحقق من وجود الصلاحية المطلوبة لاستخدام الأمر
     if (!hasClaimPermission(member)) {
-        await interaction.reply({ content: 'ليس لديك السلطة للقيام بهذا الإجراء', ephemeral: true });
+        await interaction.reply({ content: 'You do not have the authority to take this action', ephemeral: true });
         return;
     }
 
@@ -803,7 +841,7 @@ if (interaction.customId === 'add_note') {
 
     try {
         const filter = m => m.author.id === interaction.user.id;
-        const addNotePrompt = await interaction.followUp({ content: 'يرجى كتابة ملاحظتك', ephemeral: true });
+        const addNotePrompt = await interaction.followUp({ content: 'Please write your comment', ephemeral: true });
         const collectedMessages = await interaction.channel.awaitMessages({ filter, max: 1, time: 15000, errors: ['time'] });
 
         const note = collectedMessages.first().content.trim();
@@ -813,7 +851,7 @@ if (interaction.customId === 'add_note') {
         if (!embed) {
             embed = new MessageEmbed();
         }
-        embed.addField(`ملاحظة (بواسطة ${interaction.user.username})`, `\`\`\`${note}\`\`\``); // إضافة اسم الشخص
+        embed.addField(`Note (By @${interaction.user.username})`, `\`\`\`${note}\`\`\``); // إضافة اسم الشخص
 
         // تحديث الرسالة بالتضمين الجديد
         await interaction.editReply({ embeds: [embed], ephemeral: true });
@@ -821,7 +859,7 @@ if (interaction.customId === 'add_note') {
         await collectedMessages.first().delete();
         await addNotePrompt.delete();
     } catch (error) {
-        await interaction.reply({ content: 'فشلت عملية إضافة الملاحظة. يرجى المحاولة مرة أخرى.', ephemeral: true });
+        await interaction.reply({ content: 'Adding note failed. Please try again.', ephemeral: true });
     }
 }
 
@@ -834,7 +872,7 @@ if (interaction.customId === 'add_note') {
 if (interaction.customId === 'sendowntick') {
     // إرسال رسالة لطلب النص المراد إرساله
     await interaction.reply({ 
-        content: 'الرجاء إدخال النص المراد إرساله للمستخدم:', 
+        content: 'Please enter the text you want to send to the user:', 
         ephemeral: true 
     });
 
@@ -855,9 +893,9 @@ if (interaction.customId === 'sendowntick') {
 
     // إرسال النص المدخل للشخص الذي فتح التذكرة
     try {
-        await interaction.user.send(`تم إرسال لك الإشعار التالي: ${messageContent}`);
+        await interaction.user.send(`The following notification has been sent to you: ${messageContent}`);
         // إرسال رد بنجاح الإرسال
-        await interaction.followUp({ content: 'تم إرسال الرسالة بنجاح.', ephemeral: true });
+        await interaction.followUp({ content: 'Message sent successfully.', ephemeral: true });
     } catch (error) {
         console.error('Error sending message to user:', error.message);
     }
@@ -870,7 +908,7 @@ if (interaction.customId === 'claim_ticket') {
     // Check if the member has permission to claim
         const member = interaction.member; // استخدم member بدلاً من interaction.user
         if (!hasClaimPermission(member)) {
-            await interaction.reply({ content: 'ليس لديك السلطة للقيام بهذا الإجراء', ephemeral: true });
+            await interaction.reply({ content: 'You do not have the authority to take this action', ephemeral: true });
             return;
         }
 
@@ -878,7 +916,7 @@ if (interaction.customId === 'claim_ticket') {
     const claimTicket = interaction.user;
 
     // Send a confirmation message in the chat
-    const claimMessage = `تم أستلام هذه التذكرة بواسطة ${claimTicket}`;
+    const claimMessage = `This Ticket Was Claimed By ${claimTicket}`;
     await interaction.channel.send(claimMessage);
 
     // Defer the interaction to prevent timeout
@@ -886,7 +924,7 @@ if (interaction.customId === 'claim_ticket') {
     
     // Send a confirmation message and edit the existing embed
     const embed = interaction.message.embeds[0];
-    embed.fields.find(field => field.name === 'الدعم الخاص بالتذكرة').value = `${claimTicket}`; // Update the value of 'Ticket claimed By' field
+    embed.fields.find(field => field.name === 'Claimed By').value = `${claimTicket}`; // Update the value of 'Ticket claimed By' field
     await interaction.editReply({ embeds: [embed], ephemeral: true });
 
     // Disable the claim button to prevent further claims
@@ -898,7 +936,7 @@ if (interaction.customId === 'claim_ticket') {
             if (component.customId === 'claim_ticket') {
                 return new MessageButton()
                     .setCustomId('claim_ticket')
-                    .setLabel('تم الأستلام')
+                    .setLabel('Claimed')
                     .setStyle('SUCCESS') // Change button style to secondary (greyed out)
                     .setDisabled(true); // Disable the button
             } else {
@@ -917,39 +955,39 @@ if (interaction.customId === 'claim_ticket') {
   
 const selectMenuOptions = [
     {
-        label: 'لجنة الرقابة',
+        label: 'Buy Robux',
         value: 'ticket_1',
-        rolesupport: '<@&1223814666958934096>',
+        rolesupport: '<@&1223827800473997353>',
         emoji: '⛔'
     },
     {
-        label: 'طلب عقوبة إدارية',
+        label: 'Buy UC',
         value: 'ticket_2',
-        rolesupport: '<@&1223814667638407299>',
+        rolesupport: '<@&1223827483661439066>',
         emoji: '⛔'
     },
     {
-        label: 'بلاغ ضد مخرب',
+        label: 'Buy Project',
         value: 'ticket_3',
-        rolesupport: '<@&1224346531310604399>',
+        rolesupport: '<@&1223828539879587860>',
         emoji: '⛔'
     },
     {
-        label: 'بلاغ عن مشكلة تقنية',
+        label: 'Photoshop',
         value: 'ticket_4',
-        rolesupport: '<@&1224349559006826616>',
+        rolesupport: '<@&1223828047644463144>',
         emoji: '⛔'
     },
     {
-        label: 'طلب تعويض',
+        label: 'Editing',
         value: 'ticket_5',
-        rolesupport: '<@&1224346550080241817>',
+        rolesupport: '<@&1223828397898076190>',
         emoji: '⛔'
     },
     {
-        label: 'تقديم لاعب معتمد',
+        label: 'Support',
         value: 'ticket_6',
-        rolesupport: '<@&1224349445781586112>',
+        rolesupport: '<@&1223827487893487656>',
         emoji: '☑️'
     },
     {
@@ -1000,18 +1038,18 @@ const selectMenuOptions = [
 
 
 const categoryIDs = {
-    'ticket_1': '1223815609930747955', //   
-    'ticket_2': '1223823604609712258', //
-    'ticket_3': '1224347809453572176', // 
-    'ticket_4': '1224347395341549661', // 
-    'ticket_5': '1224347298641739968', // 
-    'ticket_6': '1224347550832791672', // 
-    'ticket_7': '1223815543946088600', // 
-    'ticket_8': '1223815678935699597', // 
-    'ticket_9': '1224348991496523886', // 
-    'ticket_10': '1224349058827554926', // 
-    'ticket_11': '1224349123717759137', // 
-    'ticket_12': '1224349190877085696', // 
+    'ticket_1': '1223831592758153247', //   
+    'ticket_2': '1223831592758153247', //
+    'ticket_3': '1223831592758153247', // 
+    'ticket_4': '1223831592758153247', // 
+    'ticket_5': '1223831592758153247', // 
+    'ticket_6': '1223831592758153247', // 
+    'ticket_7': '1223831592758153247', // 
+    'ticket_8': '1223831592758153247', // 
+    'ticket_9': '1223831592758153247', // 
+    'ticket_10': '1223831592758153247', // 
+    'ticket_11': '1223831592758153247', // 
+    'ticket_12': '1223831592758153247', // 
 };
   
 
@@ -1032,7 +1070,7 @@ if (userTickets.has(member.id) && userTickets.get(member.id) >= 3) {
     return;
 }
 /*/
-/*/
+
 const channel = await guild.channels.create(`${selectedDepartment.label}-${ticketCounter}`, {
     type: 'text',
     permissionOverwrites: [
@@ -1051,54 +1089,8 @@ const channel = await guild.channels.create(`${selectedDepartment.label}-${ticke
     ],
     parent: categoryID
 });
-/*/
-    // Check which option was selected
-    switch (selectedOption) {
-        case 'ticket_1':
-            // Handle ticket_1 selection
-            break;
-        case 'ticket_2':
-            // Handle ticket_2 selection
-            break;
-        // Add cases for other options as needed
-        default:
-            break;
-    }
 
-    // Respond to the interaction
-    await interaction.reply({ content: 'نعتذر، السيرفر قيد الصيانة حاليًا', ephemeral: true });
-});
 
-client.on('messageCreate', async message => {
-    if (!message.content.startsWith(prefix) || message.author.bot) return;
-
-    const args = message.content.slice(prefix.length).trim().split(/ +/);
-    const command = args.shift().toLowerCase();
-
-    if (command === 'ticketpanel') {
-        const selectMenuOptions = [
-            {
-                label: 'لجنة الرقابة',
-                value: 'ticket_1',
-                description: 'قسم للإبلاغ عن مخالفات',
-                emoji: '⛔'
-            },
-            // Add other options here
-        ];
-
-        const selectMenu = new MessageSelectMenu()
-            .setCustomId('ticket_panel')
-            .setPlaceholder('يرجى اختيار القسم الذي تريده')
-            .addOptions(selectMenuOptions);
-
-        const row = new MessageActionRow().addComponents(selectMenu);
-
-        const embed = new MessageEmbed()
-            .setTitle('> THE 4 SEASON | TICKET ')
-            .setDescription(`**شروط وتعليمات التذكرة**\n1. اختر نوع التذكرة المناسب لموضوعك\n2. اتبع الإرشادات واكمل المتطلبات المذكورة في التذكرة\n3. ...`);
-
-        await message.channel.send({ embeds: [embed], components: [row] });
-    }
 
 // قم بتعديل الرسالة الراجعة لتحتوي على الزر
 const replyMessage = `✔ Ticket Created <#${channel.id}> Ticket Number \`${ticketCounter}\``;
@@ -1107,7 +1099,7 @@ const replyMessage = `✔ Ticket Created <#${channel.id}> Ticket Number \`${tick
 const row = new MessageActionRow()
 	.addComponents(
 		new MessageButton()
-			.setLabel('رابط التيكت')
+			.setLabel('Ticket Link')
 			.setStyle('LINK') // يجعل الزر يفتح رابطًا
 			.setURL(`https://discord.com/channels/740299333697536061/${channel.id}`)
 	)
@@ -1119,54 +1111,54 @@ count++;
 const user = member.user;
 await interaction.reply({ content: replyMessage, components: [row], ephemeral: true });
 const embed = new MessageEmbed()
-    .setTitle('__THE 4 SEASON__ اهلا بك في سيرفر')
-    .setDescription(`**يرجى وصف مشكلتك بالتفصيل حتى يتمكن الدعم من مساعدتك**`)
+    .setTitle("<a:3_:1089615585232556204> Welcome To Server __Ra'ad__ Community <a:12:1150947511146664017>")
+    .setDescription(`**Please Write Your Request**`)
     .setColor('#1c1c24')
     .addFields(
-        { name: 'منشئ التذاكر', value: `${member}`, inline: true },
-        { name: 'الدعم المطلوب', value: `${selectedDepartment.rolesupport}`, inline: true },
-        { name: 'الدعم الخاص بالتذكرة', value: `**لا يوجد**`, inline: true },
-        { name: 'القسم', value: `**\`\`\`${selectedDepartment.label}\`\`\`**`, inline: true },
-        { name: 'تاريخ التذكرة', value: `**\`\`\`${egyptianDate}\`\`\`**`, inline: true },
-        { name: 'اسم مستخدم', value: `**\`\`\`${member.user.username}\`\`\`**`, inline: true },
-        { name: 'التذكرة منذ', value: `**┕<t:${startTimestamp}:R>**`, inline: true },
-        { name: 'تاريخ الانضمام للديسكورد', value: `**┕<t:${Math.floor(user.createdTimestamp / 1000)}:R>**`, inline: true },
-        { name: 'تاريخ الانضمام للسيرفر', value: `**┕<t:${Math.floor(member.joinedTimestamp / 1000)}:R>**`, inline: true },
+        { name: 'Ticket Generator', value: `${member}`, inline: true },
+        { name: 'Support Required', value: `${selectedDepartment.rolesupport}`, inline: true },
+        { name: 'Claimed By', value: `**Not Found**`, inline: true },
+        { name: 'Section', value: `**\`\`\`${selectedDepartment.label}\`\`\`**`, inline: true },
+        { name: 'Ticket Date', value: `**\`\`\`${egyptianDate}\`\`\`**`, inline: true },
+        { name: 'Username', value: `**\`\`\`${member.user.username}\`\`\`**`, inline: true },
+        { name: 'Ticket Since', value: `**┕<t:${startTimestamp}:R>**`, inline: true },
+        { name: 'Joined Discord', value: `**┕<t:${Math.floor(user.createdTimestamp / 1000)}:R>**`, inline: true },
+        { name: 'Joined Server', value: `**┕<t:${Math.floor(member.joinedTimestamp / 1000)}:R>**`, inline: true },
     );
   
     const closeButton = new MessageButton()
         .setCustomId('close_ticket')
-        .setLabel('أغلاق')
+        .setLabel('Close')
         .setStyle('DANGER');
 
     const renameButton = new MessageButton()
         .setCustomId('rename_ticket')
-        .setLabel('اعادة التسمية')
+        .setLabel('Rename')
         .setStyle('PRIMARY');
 
     const addMemberButton = new MessageButton()
         .setCustomId('addmem_kikmem')
-        .setLabel('اضافة مستخدم')
+        .setLabel('Add Member')
         .setStyle('PRIMARY');
 
     const claimButton = new MessageButton()
         .setCustomId('claim_ticket')
-        .setLabel('أستلام التذكرة')
+        .setLabel('Claim Ticket')
         .setStyle('SUCCESS');
 
     const noteButton = new MessageButton()
         .setCustomId('add_note')
-        .setLabel('أضف ملاحظة')
+        .setLabel('Add Note')
         .setStyle('SECONDARY');
   
     const sendNotificationButton = new MessageButton()
         .setCustomId('msg_sendcontrol')
-        .setLabel('إرسال رسالة للمستخدم')
+        .setLabel('Send Msg Member')
         .setStyle('SECONDARY');
   
     const msgcontrolButton = new MessageButton()
         .setCustomId('msg_control')
-        .setLabel('التحكم برسائل التكت')
+        .setLabel('Control Msg Ticket')
         .setStyle('SECONDARY');
   
     const row1 = new MessageActionRow()
@@ -1420,9 +1412,12 @@ tracker.on('guildMemberAdd', async (member, inviter, invite, error) => {
         { name: '<:TIME:1230615425834811454> Message Since', value: `<t:${startTimestamp}:R>`, inline: true },
         { name: '<:JOINED:1230615399012372571> Joined Discord', value: `<t:${Math.floor(member.user.createdAt / 1000)}:R>`, inline: true },
         { name: '<:SHARDS:1230615416141779105> Member User', value: `**\`\`${member.user.username}\`\`**`, inline: true },
-        { name: '<:LINK:1230615401394868225> Website 4 Season', value: `**[Click Here](https://bit.ly/4Season-Rp)**`, inline: true },
-        { name: '<:LINK2:1230615404481872034> Dev Instagram', value: `**[Click Here](https://www.instagram.com/ahm.depression/reels)**`, inline: true },
-        { name: '<:LINK2:1230615404481872034> Dev2 Instagram', value: `**[Click Here](https://www.instagram.com/luffy_el_masry)**`, inline: true }
+        { name: '<:API:1230615434106245141> Node.js Version', value: `**__\`\`v21.7.2\`\`__**`, inline: true },
+        { name: '<:PING:1230615410467016788> PING BOT', value: `**__\`\`${client.ws.ping}ms\`\`__**`, inline: true },
+        { name: '<:DEVELOPER:1230615437042258002> Developer BOT ', value: `<@803873969168973855>`, inline: true },
+        { name: '<:SUPPORT:1230615419572981871> Server Support ', value: `**[Click Here](https://dsc.gg/kn-server)**`, inline: true },
+        { name: '<:LINK:1230615401394868225> Instagram ', value: `**[Click Here](https://www.instagram.com/ahm.depression)**`, inline: true },
+        { name: '<:LINK2:1230615404481872034> Twitter', value: `**[Click Here](https://twitter.com/ahm_depression)**`, inline: true }
       )
     .setColor('#2F3136')
     .setImage("attachment://welcome.png")
@@ -1437,17 +1432,17 @@ client.on('guildMemberAdd', member => {
     const rulesButton = new MessageButton()
         .setStyle('LINK')
         .setLabel('قوانين السيرفر')
-        .setURL('https://discord.com/channels/740299333697536061/1026875367740407929');
+        .setURL('https://discord.com/channels/1089614823374991520/1144343379505860741');
   
     const fourSeasonButton = new MessageButton()
         .setStyle('LINK')
-        .setLabel('4 SEASON موقع الـ')
-        .setURL('https://bit.ly/4Season-Rp'); // رابط موقع الـ 4 SEASON
+        .setLabel('سيرفر راعد')
+        .setURL('https://dsc.gg/clipper-tv'); // رابط موقع الـ 4 SEASON
 
     const instaButton = new MessageButton()
         .setStyle('LINK')
         .setLabel('الانستقرام')
-        .setURL('https://www.instagram.com/luffy_el_masry'); // رابط موقع الـ 4 SEASON
+        .setURL('https://www.instagram.com/ahm.depression'); // رابط موقع الـ 4 SEASON
 
 
     const buttonRow = new MessageActionRow()
@@ -1455,14 +1450,14 @@ client.on('guildMemberAdd', member => {
 
     const embed = new MessageEmbed()
         .setColor('#2c2c34')
-        .setTitle('> #~ THE 4 SEASON اهلا بكم في سيرفر')
+        .setTitle("> Ra'ad Server اهلا بكم في سيرفر")
         .setDescription(`**نحن سعداء بوجودك معنا في السيرفر نتمنى لكم يوما سعيدا \n\n**`)
         .addFields(
-            { name: '**1. يرجى قراءة القوانين لتجنب المشاكل في السيرفر**', value: `**<#1026875367740407929>**`, inline: false },
+            { name: '**1. يرجى قراءة القوانين لتجنب المشاكل في السيرفر**', value: `**<#1144343379505860741>**`, inline: false },
             { name: '**3. دخلت السيرفر منذ**', value: `**<t:${startTimestamp}:R>**`, inline: true },
             { name: '**2. تاريخ دخولك للسيرفر**', value: `**\`\`${egyptianDate}\`\`**`, inline: true }
           )    
-        .setImage('https://media.discordapp.net/attachments/1144066420922138757/1223814208253067425/0211.png?ex=6636e84c&is=6624734c&hm=0af1c37910c115fb21490834ca311061320e69140f1018b913f21292051b7c43&format=webp&quality=lossless&width=1151&height=195&')
+        .setImage('https://cdn.discordapp.com/attachments/1144347868220620950/1227286242291351692/standard.gif?ex=663114e2&is=661e9fe2&hm=5b2e509608885941b040359775b84cce3346b1fd225f96a4fa8eb7497680603c&')
         .setThumbnail(member.user.displayAvatarURL({ size: 4096 }));
 
     member.send({ embeds: [embed], components: [buttonRow] })
@@ -1492,6 +1487,16 @@ async function generareCanvas(member) {
     .setColor("#FFFFFF")
     .setTextFont('30px Discord')
     .printText(`To ${member.guild.name}`, 512, 430)
+    // Adding "bot by ahmed" text above the image
+    .setTextAlign('center')
+    .setTextFont('bold 15px Arial')
+    .setColor("#FFFFFF")
+    .printText('</> Developer BOT Ahmed Clipper', 160, 25);
+    // Adding "insta" text below the line
+  canvas.setTextAlign('center')
+    .setTextFont('bold 15px Arial')
+    .setColor("#FFFFFF")
+    .printText('</> instagram : ahm.depression', 150, 60);
   return canvas.toBufferAsync()
 }
 
