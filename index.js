@@ -1,11 +1,8 @@
-require('dotenv/config');
-const { Client, Intents, MessageButton, IntentsBitField, DiscordAPIError, MessageSelectMenu, MessageAttachment, MessageEmbed, MessageActionRow } = require('discord.js');
+const { Client, Intents, MessageButton, IntentsBitField, DiscordAPIError, MessageSelectMenu, MessageButtonStyles, MessageAttachment, MessageEmbed, MessageActionRow } = require('discord.js');
 const { loadImage, Canvas} = require("canvas-constructor/cairo")
 const { version } = require("discord.js")
 const Keyv = require('keyv');
 const { inviteTracker } = require("discord-inviter");
-const rules = require('./rules.json');
-const { Configuration, OpenAIApi } = require('openai');
 const fs = require('fs');
 const { startServer } = require("./alive.js");
 const { REST } = require('@discordjs/rest');
@@ -17,26 +14,6 @@ const express = require('express');
 const app = express();
 const path = require("path");
 const ytdl = require('ytdl-core');
-
-app.get('/mp3', (req, res) => {
-  // تحديد مسار ملف الـ MP3
-  const filePath = __dirname + '/support.mp3';
-  
-  // قراءة ملف الـ MP3 وعرضه
-  fs.readFile(filePath, (err, data) => {
-    if (err) {
-      console.error(err);
-      res.status(500).send('حدث خطأ في قراءة الملف');
-    } else {
-      res.writeHead(200, {
-        'Content-Type': 'audio/mpeg',
-        'Content-Length': data.length
-      });
-      res.end(data);
-    }
-  });
-});
-db.on('error', err => console.log('Connection Error', err));
 
 const {
     token,
@@ -63,7 +40,7 @@ intents: [
   Intents.FLAGS.GUILD_VOICE_STATES,
   Intents.FLAGS.GUILD_MESSAGES,
   Intents.FLAGS.GUILD_MESSAGE_REACTIONS,
-  Intents.Flags.MessageContent,
+  Intents.FLAGS.MESSAGE_CONTENT
 ],
 }); // Declare client to be a new Discord Client (bot)
 require('http').createServer((req, res) => res.end(`
@@ -75,13 +52,12 @@ Server Support : https://dsc.gg/clipper-tv
   once it's ready
   */
 
+//voice support
 const mp3FilePath = path.resolve(mp3File);
-
 const lastInteractions = new Map();
 const usersInVoiceChannel = new Set();
 const playingInChannel = new Map();
 let isPlaying = false;
-
 async function joinVoiceChannelAndPlay() {
   try {
     const channel = client.channels.cache.get(channelIdToJoin);
@@ -104,14 +80,9 @@ async function joinVoiceChannelAndPlay() {
     return null;
   }
 }
-
 client.once("ready", async () => {
-
-
 const playingInChannel = new Map();
-
 let isPlaying = false;
-
 client.on("voiceStateUpdate", async (oldState, newState) => {
     const oldChannel = oldState.channel;
     const newChannel = newState.channel;
@@ -121,25 +92,31 @@ client.on("voiceStateUpdate", async (oldState, newState) => {
     }
 
     // تحقق مما إذا كان العضو الجديد دخل قناة صوتية
-    if (newChannel && newChannel.id === channelIdToJoin) {
-        // إضافة العضو إلى القائمة في القناة الصوتية
-        if (!playingInChannel.has(newChannel.id)) {
-            playingInChannel.set(newChannel.id, false);
-        }
 
-        // تحقق مما إذا كان البوت يلعب بالفعل في هذه القناة الصوتية
-        if (!playingInChannel.get(newChannel.id)) {
-            // لم يبدأ البوت التشغيل بعد في هذه القناة، قم بتشغيل الملف الصوتي
-            const connection = await joinVoiceChannelAndPlay(newChannel);
-            if (connection) {
-                const player = createAudioPlayer();
-                connection.subscribe(player);
-                const resource = createAudioResource(fs.createReadStream(mp3FilePath));
-                player.play(resource);
-                playingInChannel.set(newChannel.id, true);
+    if (newChannel && newChannel.id === channelIdToJoin) {
+    if (!playingInChannel.has(newChannel.id)) {
+        playingInChannel.set(newChannel.id, { playing: false, position: 0 }); // تخزين حالة التشغيل ونقطة التوقف
+    }
+
+    const { playing, position } = playingInChannel.get(newChannel.id);
+
+    if (!playing) {
+        const connection = await joinVoiceChannelAndPlay(newChannel);
+        if (connection) {
+            const player = createAudioPlayer();
+            connection.subscribe(player);
+            let resource;
+            if (position > 0) {
+                // إعادة التشغيل من نقطة التوقف إذا كان هناك
+                resource = createAudioResource(fs.createReadStream(mp3FilePath), { seek: position });
+            } else {
+                resource = createAudioResource(fs.createReadStream(mp3FilePath));
             }
+            player.play(resource);
+            playingInChannel.set(newChannel.id, { playing: true, position: position });
         }
     }
+}
 
     // تحقق مما إذا غادر العضو القناة الصوتية
     if (oldState.channel && oldState.channel.id === channelIdToJoin && !newState.channel) {
@@ -156,114 +133,6 @@ client.on("voiceStateUpdate", async (oldState, newState) => {
         }
     }
 });
-
-
-
-
-const configuration = new Configuration({
-  apiKey: process.env.API_KEY,
-});
-
-const openai = new OpenAIApi(configuration);
-//-----------------------------------------------------------------------------
-// قراءة ملف الإعدادات JSON
-let settings = {};
-try {
-  const settingsData = fs.readFileSync('settings.json', 'utf8');
-  settings = JSON.parse(settingsData);
-} catch (error) {
-  console.error('خطأ في قراءة ملف الإعدادات JSON:', error);
-}
-//-----------------------------------------------------------------------------
-// قائمة بمعرفات القنوات المرتبطة
-const channelIds = settings.CHANNEL_IDS || [];
-//-----------------------------------------------------------------------------
-client.on('messageCreate', async (message) => {
-  if (message.author.bot) return;
-  // التحقق مما إذا كانت الرسالة مرسلة في إحدى القنوات المعرفة
-  if (!channelIds.includes(message.channel.id)) {
-    return;
-  }
-  if (message.content.startsWith('!')) return;
-
-  let conversationLog = [
-    { role: 'system', content: 'You are a friendly chatbot.' },
-  ];
-  // دالة لتنفيذ التأخير بين كل طلب
-  function delay(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
-  try {
-    await message.channel.sendTyping();
-    let prevMessages = await message.channel.messages.fetch({ limit: 15 });
-    prevMessages.reverse();
-    message.react("<:CHAT_GPT:1230618176182812733>");
-    prevMessages.forEach((msg) => {
-      if (msg.content.startsWith('!')) return;
-      if (msg.author.id !== client.user.id && message.author.bot) return;
-      if (msg.author.id == client.user.id) {
-        conversationLog.push({
-          role: 'assistant',
-          content: msg.content,
-          name: msg.author.username
-            .replace(/\s+/g, '_')
-            .replace(/[^\w\s]/gi, ''),
-        });
-      }
-
-      if (msg.author.id == message.author.id) {
-        conversationLog.push({
-          role: 'user',
-          content: msg.content,
-          name: message.author.username
-            .replace(/\s+/g, '_')
-            .replace(/[^\w\s]/gi, ''),
-        });
-      }
-    });
-
-    const result = await openai
-      .createChatCompletion({
-        model: 'gpt-3.5-turbo',
-        messages: conversationLog,
-        // max_tokens: 256, // limit token usage
-      })
-      .catch((error) => {
-        console.log(`OPENAI ERR: ${error}`);
-      });
-
-    if (result && result.data && result.data.choices && result.data.choices[0] && result.data.choices[0].message && result.data.choices[0].message.content) {
-      const mentionedUser = message.author; // اسم الشخص الذي سيتم mention عليه
-      let messageContent = result.data.choices[0].message.content;
-
-      // فحص طول المحتوى والتأكد من أنه لا يتجاوز 2000 حرف
-      if (messageContent.length > 2000) {
-        message.channel.send("طول المحتوى يتجاوز 2000 حرف. لا يمكنني إرسال الرسالة.");
-        return;
-      }
-
-      try {
-        if (result) {
-          // إرسال النتيجة إلى الشات
-          message.channel.send(`${mentionedUser} \n ${messageContent}`);
-        } else {
-          console.log('النتيجة غير متاحة بعد');
-        }
-      } catch (error) {
-        console.log(`ERR: ${error}`);
-        // إرسال رسالة الخطأ إلى الشات
-        message.channel.send(`<@${message.author.id}> \n حدثت مشكلة أثناء الاستجابة. برجاء عدم التسرع في إرسال الأسئلة لأن ذلك يسبب لي مشكلة في معالجة بياناتي. \n <@803873969168973855> هذه المشكلة مؤقتة وجاري حل المشكلة في أقرب وقت من قبل المطور`);
-      }
-    }
-  } catch (error) {
-    console.log(`ERR: ${error}`);
-  }
-});
-
-
-
-
-
 });
 
 const { EventEmitter } = require('events');
@@ -323,6 +192,7 @@ client.on('ready', () => {
   client.user.setActivity(status[Math.floor(Math.random()*status.length)]);
   },5000)
 })
+
 
 
 let nextAzkarIndex = 0;
@@ -1320,21 +1190,6 @@ const channelCounts = new Map();
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 client.on('messageCreate', message => {
     if (!message.content.startsWith(prefix) || message.author.bot) return;
 
@@ -1364,118 +1219,6 @@ client.on('messageCreate', message => {
 
 
 
-
-
-
-
-
-  
-///////////////////////////////////
-client.on('messageCreate', async message => {
-  if (message.content === `${prefix}role-list`) {
-    if (message.member.permissions.has("ADMINISTRATOR")) {
-      
-      const row = new MessageActionRow()
-        .addComponents(
-          new MessageSelectMenu()
-            .setCustomId('select')
-            .setPlaceholder('List of Laws')
-            .addOptions(rules.map(rule => ({
-              label: rule.title,
-              description: rule.id,
-              value: rule.id,
-            }))),
-        );
-         // Fetch the description from the database
-   let image = await db.get(`description_${message.guild.id}`);
-      
-      const guild = message.guild;
-      
-      const embed = new MessageEmbed()
-      
-        .setColor('#2c2c34')
-        .setThumbnail(guild.iconURL())
-        .setTitle('<a:3_:1089615585232556204> Server Rules <a:12:1150947511146664017>')
-        .setDescription(' <a:11:1150943009442107523> to read the laws, choose from the list below \n  <a:11:1150943009442107523> please do not violate server rules \n\n <:921703781027184660:1089615608154431579> **__Developer BOT__** <@803873969168973855> <:911751899324239902:1089615602471141416>')
-        .setImage(`${image}`)
-
-      const sentMessage = await message.channel.send({ embeds: [embed], components: [row] });
-      await message.delete();
-    } else {
-      await message.reply({ content: "You need to be an administrator to use this command.", ephemeral: true });
-    }
-  }
-});
-
-client.on('interactionCreate', async (interaction) => {
-  if (interaction.isSelectMenu()) {
-    const rule = rules.find(r => r.id === interaction.values[0]);
-    const text = fs.readFileSync(rule.description, 'utf-8');
-    const ruleEmbed = new MessageEmbed()
-      .setColor('#2c2c34')
-      .setTitle(rule.title)
-      .setDescription(text)
-
-    await interaction.reply({ embeds: [ruleEmbed], ephemeral: true });
-  }
-});
-  
-//////////////////////////////////
-///////////////////////////////////
-/////////////////////////////////
-  
-
-  
-  
-
-
-client.on("messageCreate", (message) => {
-  if (message.channel.id != "1156620658969694229") return; ///// ايدي الروم
-  if (message.author.id === client.user.id) return;
-  message.react("🤍");
-});
-client.on("messageCreate", (message) => {
-  if (message.channel.id != "1181420062545027113") return; ///// ايدي الروم
-  if (message.author.id === client.user.id) return;
-  message.react("🤍");
-});
-
-client.on("messageCreate", (message) => {
-  if (message.channel.id != "1156620658969694229") return; ///// ايدي الروم
-  if (message.author.id === client.user.id) return;
-  message.react("🤲");
-});
-client.on("messageCreate", (message) => {
-  if (message.channel.id != "1181420062545027113") return; ///// ايدي الروم
-  if (message.author.id === client.user.id) return;
-  message.react("🤲");
-});
-client.on("messageCreate", (message) => {
-  if (message.channel.id != "1151010498951782450") return; ///// ايدي الروم
-  if (message.author.id === client.user.id) return;
-  message.react("🤣");
-});
-client.on("messageCreate", (message) => {
-  if (message.channel.id != "1181420208901070888") return; ///// ايدي الروم
-  if (message.author.id === client.user.id) return;
-  message.react("🤣");
-});
-client.on("messageCreate", (message) => {
-  if (message.channel.id != "1151010498951782450") return; ///// ايدي الروم
-  if (message.author.id === client.user.id) return;
-  message.react("😹");
-});
-client.on("messageCreate", (message) => {
-  if (message.channel.id != "1181420208901070888") return; ///// ايدي الروم
-  if (message.author.id === client.user.id) return;
-  message.react("😹");
-});
-client.on("messageCreate", (message) => {
-  if (message.channel.id != "1181420005284380725") return; ///// ايدي الروم
-  if (message.author.id === client.user.id) return;
-  message.react("✅");
-});
-
 client.on("messageCreate", (message) => {
   if (message.content === "مرحبا") {
     message.reply("مرحبا بك!");
@@ -1492,34 +1235,21 @@ client.on("messageCreate", (message) => {
     message.reply("❤ **عليه الصلاة والسلام** ❤");
   }
 });
-
-client.on("messageCreate", (message) => {
-  if (message.content === "تيست") {
-    message.reply("الحمدلله انا كا بوت شايف شغلي تمام انت بقي عامل ايه");
-  }
-});
 client.on("messageCreate", (message) => {
   if (message.content === "هلا") {
     message.reply("❤ هلا بيك شلونك حبيبي منور السيرفر ❤");
   }
 });
-client.on("messageCreate", (message) => {
-  if (message.content === "Kraken System") {
-    message.reply("اتفضل يانجم انا تحت أمرك");
-  }
-});
+
 
 client.on("messageCreate", (message) => {
-  if (message.content.startsWith(prefix + "saym")) {
-    const args = message.content.slice(prefix.length + "saym".length).trim();
+  if (message.content.startsWith(prefix + "say")) {
+    const args = message.content.slice(prefix.length + "say".length).trim();
     const user = message.author;
     if (!args) return message.reply("Please provide me a message! ⚠️");
     message.channel.send(args);
   }
 });
-
-
-
 
 
   /* Client when detects a message 
@@ -1696,20 +1426,48 @@ tracker.on('guildMemberAdd', async (member, inviter, invite, error) => {
       )
     .setColor('#2F3136')
     .setImage("attachment://welcome.png")
-    member.send(`Welcome to the server, ${member}!`);
 
     channel.send({ content: `||${member.user}||`, embeds: [embed], files: [attachment] })
 })
 
-
 client.on('guildMemberAdd', member => {
-    const embed = new MessageEmbed()
-        .setColor('#0099ff')
-        .setTitle('Welcome to the server!')
-        .setDescription(`We are happy to have you, ${member}! Welcome to our community.`)
-        .setThumbnail(member.user.displayAvatarURL());
+    const egyptianDate = new Date().toLocaleDateString('en-US', { timeZone: 'Africa/Cairo' });
+    const startTimestamp = Math.floor(Date.now() / 1000) - 27;
 
-    member.send({ embeds: [embed] });
+    const rulesButton = new MessageButton()
+        .setStyle('LINK')
+        .setLabel('قوانين السيرفر')
+        .setURL('https://discord.com/channels/740299333697536061/1026875367740407929');
+  
+    const fourSeasonButton = new MessageButton()
+        .setStyle('LINK')
+        .setLabel('4 SEASON موقع الـ')
+        .setURL('https://bit.ly/4Season-Rp'); // رابط موقع الـ 4 SEASON
+
+    const instaButton = new MessageButton()
+        .setStyle('LINK')
+        .setLabel('الانستقرام')
+        .setURL('https://www.instagram.com/luffy_el_masry'); // رابط موقع الـ 4 SEASON
+
+
+    const buttonRow = new MessageActionRow()
+        .addComponents([instaButton, fourSeasonButton, rulesButton]);
+
+    const embed = new MessageEmbed()
+        .setColor('#2c2c34')
+        .setTitle('> #~ THE 4 SEASON اهلا بكم في سيرفر')
+        .setDescription(`**نحن سعداء بوجودك معنا في السيرفر نتمنى لكم يوما سعيدا \n\n**`)
+        .addFields(
+            { name: '**1. يرجى قراءة القوانين لتجنب المشاكل في السيرفر**', value: `**<#1026875367740407929>**`, inline: false },
+            { name: '**3. دخلت السيرفر منذ**', value: `**<t:${startTimestamp}:R>**`, inline: true },
+            { name: '**2. تاريخ دخولك للسيرفر**', value: `**\`\`${egyptianDate}\`\`**`, inline: true }
+          )    
+        .setImage('https://media.discordapp.net/attachments/1144066420922138757/1223814208253067425/0211.png?ex=6636e84c&is=6624734c&hm=0af1c37910c115fb21490834ca311061320e69140f1018b913f21292051b7c43&format=webp&quality=lossless&width=1151&height=195&')
+        .setThumbnail(member.user.displayAvatarURL({ size: 4096 }));
+
+    member.send({ embeds: [embed], components: [buttonRow] })
+        .then(() => console.log('Sent welcome message with buttons to', member.user.tag))
+        .catch(console.error);
 });
 
 
