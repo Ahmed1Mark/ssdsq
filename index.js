@@ -1,4 +1,4 @@
-const { Client, Intents, MessageButton, IntentsBitField, DiscordAPIError, MessageSelectMenu, MessageAttachment, MessageEmbed, MessageActionRow } = require('discord.js');
+const { Client, Intents, MessageButton, IntentsBitField, NoSubscriberBehavior, DiscordAPIError, MessageSelectMenu, MessageAttachment, MessageEmbed, MessageActionRow } = require('discord.js');
 const { loadImage, Canvas} = require("canvas-constructor/cairo")
 const { version } = require("discord.js")
 const Keyv = require('keyv');
@@ -16,16 +16,7 @@ const path = require("path");
 const {
     token,
     prefix,
-    channelID: channelIdToJoin,
-    mp3File,
-    timeout,
 } = require('./config.json')
-
-const {
-  joinVoiceChannel,
-  createAudioPlayer,
-  createAudioResource,
-} = require("@discordjs/voice");
 // يمكنك استخدام mergedConfig في الشيفرة الخاصة بك الآن
 
 let canvax = require('canvas')
@@ -49,127 +40,6 @@ Server Support : https://dsc.gg/clipper-tv
   Code Below provides info about the bot 
   once it's ready
   */
-
-//voice support
-const mp3FilePath = path.resolve(mp3File);
-const lastInteractions = new Map();
-const usersInVoiceChannel = new Set();
-const playingInChannel = new Map();
-let isPlaying = false;
-async function joinVoiceChannelAndPlay(channel) {
-  try {
-    if (!channel || channel.type !== "GUILD_VOICE") {
-      console.error(
-        "Invalid voice channel or the bot cannot find the channel.",
-      );
-      return null;
-    }
-
-    const connection = joinVoiceChannel({
-      channelId: channel.id,
-      guildId: channel.guild.id,
-      adapterCreator: channel.guild.voiceAdapterCreator,
-    });
-
-    return connection;
-  } catch (error) {
-    console.error(error);
-    return null;
-  }
-}
-
-client.once("ready", async () => {
-  // هنا يمكنك الاستعانة بقائمة الأعضاء في القناة الصوتية لمراقبة مدى وجود البوت في القناة
-  const usersInVoiceChannel = new Set();
-
-  const channel = client.channels.cache.get(channelIdToJoin);
-  if (channel && channel.type === "GUILD_VOICE") {
-    // التحقق مما إذا كان البوت متصلًا بالفعل بالقناة
-    if (!channel.members.has(client.user.id)) {
-      const connection = await joinVoiceChannelAndPlay(channel);
-      if (connection) {
-        const player = createAudioPlayer();
-        connection.subscribe(player);
-        const resource = createAudioResource(fs.createReadStream(mp3FilePath));
-        player.play(resource);
-      }
-    }
-  } else {
-    console.error("Invalid voice channel ID or the bot cannot find the channel.");
-  }
-
-  client.on("voiceStateUpdate", async (oldState, newState) => {
-    const oldChannel = oldState.channel;
-    const newChannel = newState.channel;
-
-    if (newState.member.user.bot) {
-      return;
-    }
-
-    if (newChannel && newChannel.id === channelIdToJoin) {
-      // هنا يمكنك إدارة التفاعل مع دخول الأعضاء للقناة الصوتية
-    }
-
-    if (oldState.channel && oldState.channel.id === channelIdToJoin && !newState.channel) {
-      // هنا يمكنك إدارة التفاعل مع خروج الأعضاء من القناة الصوتية
-    }
-  });
-});
-
-client.once("ready", async () => {
-const playingInChannel = new Map();
-let isPlaying = false;
-client.on("voiceStateUpdate", async (oldState, newState) => {
-    const oldChannel = oldState.channel;
-    const newChannel = newState.channel;
-
-    if (newState.member.user.bot) {
-        return;
-    }
-
-    // تحقق مما إذا كان العضو الجديد دخل قناة صوتية
-
-    if (newChannel && newChannel.id === channelIdToJoin) {
-    if (!playingInChannel.has(newChannel.id)) {
-        playingInChannel.set(newChannel.id, { playing: false, position: 0 }); // تخزين حالة التشغيل ونقطة التوقف
-    }
-
-    const { playing, position } = playingInChannel.get(newChannel.id);
-
-    if (!playing) {
-        const connection = await joinVoiceChannelAndPlay(newChannel);
-        if (connection) {
-            const player = createAudioPlayer();
-            connection.subscribe(player);
-            let resource;
-            if (position > 0) {
-                // إعادة التشغيل من نقطة التوقف إذا كان هناك
-                resource = createAudioResource(fs.createReadStream(mp3FilePath), { seek: position });
-            } else {
-                resource = createAudioResource(fs.createReadStream(mp3FilePath));
-            }
-            player.play(resource);
-            playingInChannel.set(newChannel.id, { playing: true, position: position });
-        }
-    }
-}
-
-    // تحقق مما إذا غادر العضو القناة الصوتية
-    if (oldState.channel && oldState.channel.id === channelIdToJoin && !newState.channel) {
-        // إذا كان العضو الذي غادر هو العضو الأخير في القناة، قم بوقف تشغيل الملف الصوتي
-        if (oldState.channel.members.size === 1) {
-            playingInChannel.set(oldState.channel.id, false);
-            if (client.voice && client.voice.connections) {
-                client.voice.connections.forEach((connection) => {
-                    if (connection.channel.id === oldState.channel.id) {
-                        connection.disconnect();
-                    }
-                });
-            }
-        }
-    }
-});
-});
 
 const { EventEmitter } = require('events');
 EventEmitter.defaultMaxListeners = 30; // أو أي قيمة تعتقد أنها مناسبة
